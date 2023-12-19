@@ -4,27 +4,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
 type Client struct {
-	BaseUrl            string
-	HttpClient         *http.Client
-	ApiKey             string
-	BNBContractAddress string
+	BaseUrl    string
+	HttpClient *http.Client
+	ApiKey     string
 }
 
 type Config struct {
-	BaseURL            string
-	Timeout            int
-	ApiKey             string
-	BNBContractAddress string
+	BaseURL string
+	Timeout int64
+	ApiKey  string
 }
 
 type ApiResponse struct {
 	Status  string      `json:"status"`
 	Message string      `json:"message"`
 	Result  interface{} `json:"result"`
+}
+
+type ClientI interface {
+	GetBnbAllocation(address string) (string, error)
 }
 
 func NewClient(cfg Config) *Client {
@@ -37,7 +40,7 @@ func NewClient(cfg Config) *Client {
 }
 
 func (c *Client) GetBnbAllocation(address string) (string, error) {
-	url := fmt.Sprintf("%s/api?module=account&action=balance&address=%s&apikey=%s", c.BaseUrl, address, c.ApiKey)
+	url := fmt.Sprintf("%s?module=account&action=balance&address=%s&apikey=%s", c.BaseUrl, address, c.ApiKey)
 
 	resp, err := c.HttpClient.Get(url)
 	defer resp.Body.Close()
@@ -56,5 +59,17 @@ func (c *Client) GetBnbAllocation(address string) (string, error) {
 		return "", fmt.Errorf("API response status is not 1")
 	}
 
-	return apiResponse.Result.(string), nil
+	allocation := apiResponse.Result.(string)
+
+	if len(allocation) < 18 {
+		allocation = strings.Repeat("0", 18-len(allocation)) + allocation
+	}
+
+	resultStr := allocation[:len(allocation)-18] + "." + allocation[len(allocation)-18:]
+
+	if strings.HasPrefix(resultStr, ".") {
+		resultStr = "0" + resultStr
+	}
+
+	return resultStr, nil
 }
